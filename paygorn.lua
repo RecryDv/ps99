@@ -36,7 +36,7 @@ local button = Instance.new("TextButton", screen)
 button.Position = UDim2.fromScale(0.5, 0.85)
 button.AnchorPoint = Vector2.new(0.5, 0.85)
 button.TextScaled = true
-button.Text = "Scan"
+button.Text = "Auto scan"
 button.BackgroundColor3 = Color3.fromRGB(255,255,255)
 button.TextColor3 = Color3.fromRGB(0,0,0)
 button.Size = UDim2.fromScale(0.2, 0.1)
@@ -52,6 +52,7 @@ mbutton.Size = UDim2.fromScale(0.125, 0.065)
 getgenv().cache.button = screen
 
 local mining = false
+local scan = false
 local rad = 8
 spawn(function()
 	while task.wait() do
@@ -59,6 +60,12 @@ spawn(function()
 			mbutton.Text = "Stop mining"
 		elseif not mining then
 			mbutton.Text = "Start mining"
+		end
+
+		if scan then
+			button.BackgroundColor3 = Color3.fromRGB(123, 255, 66)
+		elseif not scan then
+			button.BackgroundColor3 = Color3.fromRGB(255, 90, 49)
 		end
 
 		mbutton.Text = mbutton.Text..tostring("("..rad.."x"..rad..")")
@@ -111,47 +118,57 @@ mbutton.MouseButton1Click:Connect(function()
 	end
 end)
 button.Activated:Connect(function()
+	scan = not scan
 	for i,v in pairs(getgenv().cache.ores) do
 		v:Destroy()
 	end
+	while scan do
 
-	local Blocks = nil
+		local Blocks = nil
 
-	for i,v in pairs(workspace.__THINGS.BlockWorlds:GetChildren()) do
-		if v.Name:find("Blocks") then
-			Blocks = v
+		for i,v in pairs(workspace.__THINGS.BlockWorlds:GetChildren()) do
+			if v.Name:find("Blocks") then
+				Blocks = v
+			end
 		end
-	end
 
-	local scanned = 0
+		local scanned = 0
+        local new = {}
+		for i,v in pairs(Blocks:GetChildren()) do
+			if math.random(1, 1250) == 1 then
+				task.wait()
+			end
+			pcall(function()
+				local display, color = false, Color3.fromRGB(0,0,0)
+				local id = v:GetAttribute("id")
 
-	for i,v in pairs(Blocks:GetChildren()) do
-		pcall(function()
-			local display, color = false, Color3.fromRGB(0,0,0)
-			local id = v:GetAttribute("id")
-
-			for i2,v2 in pairs(blocks) do
-				if i2 == id then
-					display = true
-					color = v2.color
+				for i2,v2 in pairs(blocks) do
+					if i2 == id then
+						display = true
+						color = v2.color
+					end
 				end
-			end
 
-			if display then
-				local render = Instance.new("BillboardGui", v)
-				render.Size = UDim2.fromScale(v.Size.X, v.Size.Y)
-				render.ResetOnSpawn = false
-				render.AlwaysOnTop = true
-				local text = Instance.new("TextLabel", render)
-				text.Size = UDim2.fromScale(1, 1)
-				text.BackgroundTransparency = 0.5
-				text.TextColor3 = Color3.fromRGB(255,255,255)
-				text.BackgroundColor3 = color
-				text.Text = id
-				table.insert(getgenv().cache.ores, render)
+				if display then
+					local render = Instance.new("BillboardGui", v)
+					render.Size = UDim2.fromScale(v.Size.X, v.Size.Y)
+					render.ResetOnSpawn = false
+					render.AlwaysOnTop = true
+					local text = Instance.new("TextLabel", render)
+					text.Size = UDim2.fromScale(1, 1)
+					text.BackgroundTransparency = 0.5
+					text.TextColor3 = Color3.fromRGB(255,255,255)
+					text.BackgroundColor3 = color
+					text.Text = id
+					table.insert(new, render)
 
-			end
-		end)
+				end
+			end)
+		end
+        for i,v in pairs(getgenv().cache.ores) do
+			v:Destroy()
+		end
+        getgenv().cache.ores = new
+		task.wait(0.2)
 	end
-
 end)
