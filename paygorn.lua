@@ -2,11 +2,11 @@ local blocks = {
 	Emerald = {
 		color = Color3.fromRGB(0,255,128)
 	},
-	
+
 	Amethyst = {
 		color = Color3.fromRGB(113, 57, 255)
 	},
-	
+
 	Rainbow = {
 		color = Color3.fromRGB(255, 42, 14)
 	}
@@ -41,8 +41,75 @@ button.BackgroundColor3 = Color3.fromRGB(255,255,255)
 button.TextColor3 = Color3.fromRGB(0,0,0)
 button.Size = UDim2.fromScale(0.2, 0.1)
 
+local mbutton = Instance.new("TextButton", screen)
+mbutton.Position = UDim2.fromScale(0.5, 0.7)
+mbutton.AnchorPoint = Vector2.new(0.5, 0.7)
+mbutton.TextScaled = true
+mbutton.BackgroundColor3 = Color3.fromRGB(255,255,255)
+mbutton.TextColor3 = Color3.fromRGB(0,0,0)
+mbutton.Size = UDim2.fromScale(0.125, 0.065)
+
 getgenv().cache.button = screen
 
+local mining = false
+local rad = 8
+spawn(function()
+	while task.wait() do
+		if mining then
+			mbutton.Text = "Stop mining"
+		elseif not mining then
+			mbutton.Text = "Start mining"
+		end
+
+		mbutton.Text = mbutton.Text..tostring("("..rad.."x"..rad..")")
+	end
+end)
+local cmd = require(game:GetService("ReplicatedStorage").Library.Client.MiningCmds)
+mbutton.MouseButton2Click:Connect(function()
+	if rad < 16 then
+		rad *= 2
+	elseif rad == 16 then
+		rad = 2
+	end
+end)
+mbutton.MouseButton1Click:Connect(function()
+	if not mining then
+		mining = true
+	elseif mining then
+		mining = false
+	end
+
+
+	local foot = cmd.GetBlockAtFoot()
+	if foot ~= nil then
+		local pos = foot.Pos
+		local c = 0
+		local r2 = rad / 2
+		for y = -pos.Y, 256 do
+			for x = pos.X - r2 + 1, pos.X + r2 do
+				for z = pos.Z - r2 + 1, pos.Z + r2 do
+					local pos = Vector3int16.new(x,-y,z)
+					game:GetService("ReplicatedStorage"):WaitForChild("Network"):WaitForChild("BlockWorlds_Target"):FireServer(pos)
+					game:GetService("ReplicatedStorage"):WaitForChild("Network"):WaitForChild("BlockWorlds_Break"):FireServer(pos)
+
+				end
+			end
+			task.wait(0.2 * r2)
+			c += 1
+			if c == 6 then
+				c = 0
+				task.wait(0.15 * rad)
+			end
+			if not mining then
+				break
+			end
+		end
+	end
+
+	if foot == nil then
+		mining = false
+	end
+end)
 button.Activated:Connect(function()
 	for i,v in pairs(getgenv().cache.ores) do
 		v:Destroy()
