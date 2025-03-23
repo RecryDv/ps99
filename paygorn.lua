@@ -1,8 +1,4 @@
 local blocks = {
-	Emerald = {
-		color = Color3.fromRGB(0,255,128)
-	},
-
 	Amethyst = {
 		color = Color3.fromRGB(113, 57, 255)
 	},
