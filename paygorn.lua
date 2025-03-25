@@ -1,237 +1,303 @@
-local blocks = {
-	Amethyst = {
-		color = Color3.fromRGB(113, 57, 255)
-	},
 
-	Rainbow = {
-		color = Color3.fromRGB(255, 42, 14)
-	}
-}
 
-if getgenv().cache ~= nil then
-	if getgenv().cache.button ~= nil then
-		getgenv().cache.button:Destroy()
+if getgenv().wtool ~= nil and getgenv().wtool.screen ~= nil then
+	getgenv().wtool.screen:Destroy()
+end
+
+local screen = Instance.new("ScreenGui", gethui())
+screen.ResetOnSpawn = false
+screen.IgnoreGuiInset = true
+screen.Enabled = true
+
+local bwc = require(game:GetService("ReplicatedStorage").Library.Client.MiningCmds.BlockWorldClient)
+
+
+game:GetService("UserInputService").InputEnded:Connect(function(key)
+	key = key.KeyCode
+
+	if key == Enum.KeyCode.Delete then
+		screen.Enabled = not screen.Enabled
 	end
+end)
 
-	if getgenv().cache.ores ~= nil then
-		for i,v in pairs(getgenv().cache.ores) do
-			v:Destroy()
-		end
+local ores = {}
+
+for i,v in pairs(game:GetService("ReplicatedStorage").__DIRECTORY.Blocks:GetChildren()) do
+	if v.Name:find("Ore") then
+		local id = require(v).DisplayName:split(" ")[1]
+		table.insert(ores, id)
 	end
 end
 
+table.sort(ores, function(a, b)
+	return a > b
+end)
 
-
-getgenv().cache = {
-	ores = {},
+local ui = {
+	tabs = 0
 }
-local screen = Instance.new("ScreenGui", gethui())
-screen.ResetOnSpawn = false
 
-local button = Instance.new("TextButton", screen)
-button.Position = UDim2.fromScale(0.5, 0.85)
-button.AnchorPoint = Vector2.new(0.5, 0.85)
-button.TextScaled = true
-button.Text = "Auto scan"
-button.BackgroundColor3 = Color3.fromRGB(255,255,255)
-button.TextColor3 = Color3.fromRGB(0,0,0)
-button.Size = UDim2.fromScale(0.2, 0.1)
+ui.CreateToggleTab = function(data)
+	local args = data.args or {}
+	local func = data.func
+	local name = data.name
 
-local mbutton = Instance.new("TextButton", screen)
-mbutton.Position = UDim2.fromScale(0.5, 0.75)
-mbutton.AnchorPoint = Vector2.new(0.5, 0.725)
-mbutton.TextScaled = true
-mbutton.BackgroundColor3 = Color3.fromRGB(255,255,255)
-mbutton.TextColor3 = Color3.fromRGB(0,0,0)
-mbutton.Size = UDim2.fromScale(0.125, 0.065)
+	ui.tabs += 1
+	local arg_count = 0
+	local pos = UDim2.fromScale(ui.tabs * 0.125, 0.2)
+	local pos2 = Vector2.new(ui.tabs * 0.125, 0.2)
 
-getgenv().cache.button = screen
+	local bt = Instance.new("TextButton", screen)
+	bt.Name = "Tab"..ui.tabs
+	bt.Size = UDim2.fromScale(0.1, 0.065)
+	bt.BorderSizePixel = 0  
+	bt.Position = pos
+	bt.AnchorPoint = pos2
+	bt.Text = name
+	bt.TextScaled = true
+	bt.BorderSizePixel = 4
 
-local mining = false
-local scan = false
-local rad = 8
-spawn(function()
-	while task.wait() do
-		if mining then
-			mbutton.Text = "Stop mining"
-		elseif not mining then
-			mbutton.Text = "Start mining"
+	local render_args = false
+	local enabled = false
+
+	spawn(function()
+		while task.wait() do
+			local color = if enabled then Color3.fromRGB(137, 255, 94) else Color3.fromRGB(255, 75, 75)
+			bt.BackgroundColor3 = color
 		end
+	end)
 
-		if scan then
-			button.BackgroundColor3 = Color3.fromRGB(123, 255, 66)
-		elseif not scan then
-			button.BackgroundColor3 = Color3.fromRGB(255, 90, 49)
-		end
+	local args_render = {}
 
-		if typeof(rad) == "number" then
-			mbutton.Text = mbutton.Text..tostring(" ("..rad.."x"..rad..")")
-		elseif typeof(rad) == "string" then
-			mbutton.Text = mbutton.Text..tostring(" ("..rad..")")
-		end
-		
-		
+
+
+
+	local new = {}
+
+	for i,v in pairs(args) do
+		new[v] = false
 	end
-end)
-local mtime = {
-	Emerald = 0.05,
-	Amethyst = 0.5,
-	Rainbow = 1.5,
+
+	args = new
+
+	for i,v in pairs(args) do
+		arg_count += 1
+		local arg_enabled = false
+
+		local arg = Instance.new("TextButton", screen)
+		arg.BorderSizePixel = 0
+		arg.Position = pos + UDim2.fromScale(0, (bt.Size.Y.Scale + 0.005) * arg_count)
+		arg.AnchorPoint = pos2 + Vector2.new(0, (bt.Size.Y.Scale + 0.005) * arg_count)
+		arg.Size = bt.Size
+		arg.Text = i
+		arg.TextSize = 16
+		arg.BorderSizePixel = 2
+
+
+		spawn(function()
+			while task.wait() do
+				local color = if arg_enabled then Color3.fromRGB(137, 255, 94) else Color3.fromRGB(255, 75, 75)
+				arg.BackgroundColor3 = color
+				arg.Visible = render_args
+			end
+		end)
+
+
+		arg.Activated:Connect(function()
+			arg_enabled = not arg_enabled
+			args[i] = not args[i]
+		end)
+	end
+
+
+	bt.MouseButton2Click:Connect(function()
+		render_args = not render_args
+	end)
+
+	bt.MouseButton1Click:Connect(function() 
+		enabled = not enabled
+		func(enabled, args)
+	end)
+
+
+
+
+end
+getgenv().wtool = {
+	scans = {},
+	data = {
+		xray = false,
+		mine = false,
+		dstats = false,
+	}
 }
-local cmd = require(game:GetService("ReplicatedStorage").Library.Client.MiningCmds)
-mbutton.MouseButton2Click:Connect(function()
-	if not mining then
-		if typeof(rad) == "number" and rad < 16 then
-			rad *= 2
-		elseif rad == 16 then
-			rad = "Emerald"
-		elseif rad == "Emerald" then
-			rad = "Amethyst"
-		elseif rad == "Amethyst" then
-			rad = "Rainbow"
-		elseif rad == "Rainbow" then
-			rad = 2
-		end
-	end
-end)
-mbutton.MouseButton1Click:Connect(function()
-	if not mining then
-		mining = true
-	elseif mining then
-		mining = false
-	end
 
+local colors = {
+	Sapphire = Color3.fromRGB(0, 68, 255),
+	Emerald = Color3.fromRGB(60, 255, 46),
+	Rainbow = Color3.fromRGB(255, 240, 32),
+	Amethyst = Color3.fromRGB(217, 103, 255),
+	Ruby = Color3.fromRGB(255, 12, 12)
+}
 
-	local foot = cmd.GetBlockAtFoot()
-	if foot ~= nil and typeof(rad) == "number" then
-		local pos = foot.Pos
-		local c = 0
-		local r2 = rad / 2
-		for y = -pos.Y, 256 do
-			for x = pos.X - r2 + 1, pos.X + r2 do
-				for z = pos.Z - r2 + 1, pos.Z + r2 do
-					local pos = Vector3int16.new(x,-y,z)
-					game:GetService("ReplicatedStorage"):WaitForChild("Network"):WaitForChild("BlockWorlds_Target"):FireServer(pos)
-					game:GetService("ReplicatedStorage"):WaitForChild("Network"):WaitForChild("BlockWorlds_Break"):FireServer(pos)
-
-				end
-			end
-			task.wait(0.2 * r2)
-			c += 1
-			if c == 6 then
-				c = 0
-				task.wait(0.15 * rad)
-			end
-			if not mining then
-				break
-			end
-		end
-	end
-	
-	if typeof(rad) == "string" then
-		while mining do
-			task.wait()
-			local id = rad
-
-			local Blocks = nil
-
-			for i,v in pairs(workspace.__THINGS.BlockWorlds:GetChildren()) do
-				if v.Name:find("Blocks") then
-					Blocks = v
-				end
-			end
-			for i,v in pairs(Blocks:GetChildren()) do
-				if not mining then
-					break
-				end
-				local e = false
-				v.Destroying:Connect(function()
-					e = true
-				end)
-				if v:GetAttribute("id") == id then
-					repeat
-						task.wait()
-						local t = if id == "amethyst" then 0.5 else 1.5
-						game.Players.LocalPlayer.Character:SetPrimaryPartCFrame(v.CFrame + Vector3.new(0, 0.5, 0))
-						local foot = cmd.GetBlockAtFoot()
-
-						local function dmg()
-							local foot = cmd.GetBlockAtFoot()
-							if foot ~= nil then
-								local pos = foot.Pos
-
-								game:GetService("ReplicatedStorage"):WaitForChild("Network"):WaitForChild("BlockWorlds_Target"):FireServer(pos)
-								task.wait(mtime[id])
-								game:GetService("ReplicatedStorage"):WaitForChild("Network"):WaitForChild("BlockWorlds_Break"):FireServer(pos)
-							end
-						end
-
-	
-
-						dmg()
-					until e == true or mining == false
-				end
-			end
-		end
-	end
-
-	if foot == nil and typeof(rad) == "number" then
-		mining = false
-	end
-end)
-button.Activated:Connect(function()
-	scan = not scan
-	for i,v in pairs(getgenv().cache.ores) do
-		v:Destroy()
-	end
-	while scan do
-
-		local Blocks = nil
-
-		for i,v in pairs(workspace.__THINGS.BlockWorlds:GetChildren()) do
-			if v.Name:find("Blocks") then
-				Blocks = v
-			end
-		end
-
-		local scanned = 0
-		local new = {}
-		for i,v in pairs(Blocks:GetChildren()) do
-			if math.random(1, 1250) == 1 then
-				task.wait()
-			end
-			pcall(function()
-				local display, color = false, Color3.fromRGB(0,0,0)
-				local id = v:GetAttribute("id")
-
-				for i2,v2 in pairs(blocks) do
-					if i2 == id then
-						display = true
-						color = v2.color
-					end
-				end
-
-				if display then
-					local render = Instance.new("BillboardGui", v)
-					render.Size = UDim2.fromScale(v.Size.X, v.Size.Y)
-					render.ResetOnSpawn = false
-					render.AlwaysOnTop = true
-					local text = Instance.new("TextLabel", render)
-					text.Size = UDim2.fromScale(1, 1)
-					text.BackgroundTransparency = 0.5
-					text.TextColor3 = Color3.fromRGB(255,255,255)
-					text.BackgroundColor3 = color
-					text.Text = id
-					table.insert(new, render)
-
-				end
-			end)
-		end
-		
-		for i,v in pairs(getgenv().cache.ores) do
+ui.CreateToggleTab({
+	name = "Ore XRay",
+	func = function(val, args)
+		getgenv().wtool.data.xray = val
+		for i,v in pairs(getgenv().wtool.scans) do
 			v:Destroy()
 		end
-		getgenv().cache.ores = new
-		task.wait(0.2)
-	end
-end)
+		
+		if val == true then
+			while getgenv().wtool.data.xray do
+				task.wait(0.1)
+				for i,v in pairs(getgenv().wtool.scans) do
+					v:Destroy()
+				end
+				if getgenv().wtool.data.xray then
+					local blocks = nil
+					if bwc.GetLocal() then
+						blocks = bwc.GetLocal().Blocks
+					else
+						print("player MUST be in mining location")
+						return
+					end
+					
+					for i,v in pairs(blocks) do
+						local id = v.Part:GetAttribute("id")
+						local display = false
+
+						if args[id]  == true then
+							display = true
+						end
+
+
+						if display == true then
+							local render = Instance.new("BillboardGui", v.Part)
+							render.Size = UDim2.fromScale(4.5, 4.5)
+							render.AlwaysOnTop = true
+
+							local t = Instance.new("Frame", render)
+							t.Size = UDim2.fromScale(1, 1)
+							t.BorderSizePixel = 2
+							t.BorderColor3 = Color3.fromRGB(0,0,0)
+							local t2 = Instance.new("TextLabel", t)
+							t2.Size = UDim2.fromScale(1,1)
+							t2.Text = id
+							t2.TextScaled = true
+							t2.BackgroundTransparency = 1
+							t2.TextColor3 = Color3.fromRGB(255,255,255)
+							local color = colors[id]
+							t.BackgroundColor3 = color
+
+							table.insert(getgenv().wtool.scans, render)
+						end
+					end
+				end
+			end
+		end
+	end,
+	args = ores,
+})
+
+ui.CreateToggleTab({
+	name = "Auto mine",
+	args = ores,
+	func = function(val, args)
+		getgenv().wtool.data.mine = val
+		
+		spawn(function()
+			while getgenv().wtool.data.mine do
+				task.wait(0.2)
+				local blocks = nil
+				if bwc.GetLocal() then
+					blocks = bwc.GetLocal().Blocks
+				else
+					print("player MUST be in mining location")
+					return
+				end
+				
+				local smth_found = false
+
+				for i,v in pairs(blocks) do
+					local cframe = v.CFrame
+					local pos = v.Pos
+					local id = v.Part:GetAttribute("id")
+
+
+					if args[id] == true and getgenv().wtool.data.mine == true then
+						smth_found = true
+						local destroyed = false
+
+						local t = 0.1
+						v.Part.Changed:Once(function()
+							destroyed = true
+						end)
+						repeat
+							spawn(function()
+								while not destroyed and getgenv().wtool.data.mine == true and args[id] == true do
+									task.wait()
+									game.Players.LocalPlayer.Character:SetPrimaryPartCFrame(cframe)
+								end
+							end)
+							pcall(function()
+								task.wait()
+								game:GetService("ReplicatedStorage").Network.BlockWorlds_Target:FireServer(pos)
+								task.wait(t)
+								game:GetService("ReplicatedStorage").Network.BlockWorlds_Break:FireServer(pos)
+								task.wait(0.01)
+							end)
+
+							t += 0.3
+						until destroyed or args[id] == false or getgenv().wtool.data.mine == false
+					end
+				end
+				
+				
+				if not smth_found and getgenv().wtool.data.mine then
+					for i = 1, 15 do
+						local v = nil
+						for i,v1 in pairs(blocks) do
+							v = v1
+							break
+						end
+						local cframe = v.CFrame
+						local pos = v.Pos
+						local id = v.Part:GetAttribute("id")
+						
+						local destroyed = false
+						local t = 0.1
+						v.Part.Changed:Once(function()
+							destroyed = true
+						end)
+						
+						if getgenv().wtool.data.mine == false then
+							break
+						end
+						
+						repeat
+							spawn(function()
+								while not destroyed and getgenv().wtool.data.mine == true do
+									task.wait()
+									game.Players.LocalPlayer.Character:SetPrimaryPartCFrame(cframe)
+								end
+							end)
+							pcall(function()
+								game:GetService("ReplicatedStorage").Network.BlockWorlds_Target:FireServer(pos)
+								task.wait(t)
+								game:GetService("ReplicatedStorage").Network.BlockWorlds_Break:FireServer(pos)
+								task.wait(0.01)
+							end)
+
+							t += 0.3
+						until destroyed or args[id] == false or getgenv().wtool.data.mine == false
+					end
+				end
+				
+			end
+		end)
+	end,
+})
+
+
+getgenv().wtool.screen = screen
