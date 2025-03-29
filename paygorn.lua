@@ -37,11 +37,11 @@ local function isOre(id)
 	if table.find(ores_id, id) then
 		return true
 	end
-	
+
 	if string.lower(id):find("chest") then
 		return true
 	end
-	
+
 	return false
 end
 
@@ -62,13 +62,13 @@ local mining_event_items_dec = {
 
 local function dec_short_names(tbl_id, val)
 	local new_tbl = {}
-	
+
 	for i,v in pairs(mining_event_items_short[tbl_id]) do
 		if table.find(val, v) then
 			table.insert(new_tbl, mining_event_items_dec[tbl_id][v])
 		end
 	end
-	
+
 	return new_tbl
 end
 
@@ -136,23 +136,33 @@ farm:Toggle({
 
 			local current_block = center_block or mcmd.GetBlockUnderPlayer()
 			local function GetTimeToBreak(block, extra)
-				local extra = extra or 0
+				extra = extra or 0
+				local player = game.Players.LocalPlayer
 				local blockStrength = block:GetDirectory().Strength
 
+				
 				local selectedPickaxe = MiningUtil.GetSelectedPickaxe(player)
 				local bestPickaxe = MiningUtil.GetBestPickaxe(player, true)
 
 				if not selectedPickaxe or not bestPickaxe then
-					return "no"
+					return 0
 				end
 
+				
 				local damagePerHit = MiningUtil.ComputeDamage(player, selectedPickaxe, bestPickaxe, block:GetDirectory())
 				local miningSpeed = MiningUtil.ComputeSpeed(player, selectedPickaxe)
 				local dps = damagePerHit * miningSpeed
 
-				return blockStrength / dps + 0.001 + player:GetNetworkPing() / 2.5 + extra
-			end
+				local baseTime = blockStrength / dps
+				local pingCompensation = player:GetNetworkPing() / 2 
+				local totalTime = baseTime + 0.001 + pingCompensation + extra
 
+				
+				local randomFactor = 1 + (math.random() * 0.05 - 0.025) 
+				totalTime = totalTime * randomFactor
+
+				return math.max(0.025, totalTime)
+			end
 			local function GetBlockUnder(pos)
 				local x = pos.X
 				local y = pos.Y
@@ -210,59 +220,58 @@ farm:Toggle({
 								end
 								game:GetService("ReplicatedStorage"):WaitForChild("Network"):WaitForChild("BlockWorlds_Target"):FireServer(v.Pos)
 								task.wait(cd/r)
-								
+
 								game:GetService("ReplicatedStorage"):WaitForChild("Network"):WaitForChild("BlockWorlds_Break"):FireServer(v.Pos)
 							end
 
 							destroy()
 						end)
 					end
-					
+
 					if #rblocks == 0 then
 						reqY -= 1
 					end
 
-					
+
 
 				end
 
 			end
-			
+
 			if current_block ~= nil and mode == "Only ores" then
 				local y = 0
-				
+
 				local function destroy(blc)
 					local id = blc.Part:GetAttribute("id")
-					
+
 					if isOre(id) then
 						task.wait(0.05)
 					end
 					local cd = GetTimeToBreak(blc)
 					game.Players.LocalPlayer.Character:SetPrimaryPartCFrame(blc.Part.CFrame + Vector3.new(0, 5, 0))
-					task.wait(0.02)
 					if isOre(id) then
 						task.wait(0.1)
 					end
 					game:GetService("ReplicatedStorage"):WaitForChild("Network"):WaitForChild("BlockWorlds_Target"):FireServer(blc.Pos)
-					task.wait(cd + 0.1)
+					task.wait(cd + 0.02)
 					game:GetService("ReplicatedStorage"):WaitForChild("Network"):WaitForChild("BlockWorlds_Break"):FireServer(blc.Pos)
 				end
-				
+
 				while data.mining  do
 					task.wait()
 					local temp_ores = {}
 					for i,v in pairs(blocks.Blocks) do
 						pcall(function()
 							local id = v.Part:GetAttribute("id")
-							
+
 							if isOre(id) then
 								table.insert(temp_ores, v)
 							end
 						end)
 					end
-					
-					
-					
+
+
+
 					if #temp_ores == 0 then
 						for z = -16, 16, 2 do
 							if not data.mining then
@@ -297,7 +306,7 @@ farm:Toggle({
 															game:GetService("ReplicatedStorage"):WaitForChild("Network"):WaitForChild("Consumables_Consume"):InvokeServer(unpack(args))
 
 														end
-														
+
 														spawn()
 														break
 													end
@@ -307,7 +316,7 @@ farm:Toggle({
 											destroy(block)
 											local other_block = Vector3int16.new(x, y - 1, z)
 											other_block = blocks:GetBlock(other_block)
-											
+
 											if other_block ~= nil then
 												destroy(other_block)
 											end
@@ -337,13 +346,13 @@ farm:Toggle({
 							destroy(v)
 						end
 					end
-					
-					
+
+
 				end
-				
-				
-				
-			
+
+
+
+
 			end
 
 			if current_block ~= nil and mode == "Default" then
@@ -369,7 +378,7 @@ farm:Toggle({
 
 							local pos = Vector3int16.new(x,-y,z)
 							local new_block = blocks:GetBlock(pos)
-							
+
 							local function breakblock(pos)
 								local new_block = blocks:GetBlock(pos)
 								if new_block == nil then
@@ -391,10 +400,10 @@ farm:Toggle({
 										if z + b <= maxZ and z + b >= minZ then
 											breakblock(Vector3int16.new(x, -y, z + b))
 										end
-									
+
 									end
 								end
-								
+
 								wclip("x", 1)
 								wclip("x", 2)
 								wclip("z", 1)
@@ -446,7 +455,7 @@ farm:Slider({
 		Max = 100,
 		Default = 0,
 	},
-	
+
 	Callback = function(val)
 		data.only_ores_tnt_chance = val
 	end,
@@ -515,8 +524,8 @@ xray:Toggle({
 					end
 				end)
 			end
-			
-			
+
+
 
 		end
 	end,
@@ -524,10 +533,10 @@ xray:Toggle({
 
 merchant:Toggle({
 	Title = "Auto buy mine merchant",
-	
+
 	Callback = function(val)
 		data.merchant = val
-		
+
 		while data.merchant do
 			task.wait(1)
 			for i = 1, 6 do
