@@ -1,16 +1,4 @@
-local blocks = {
-	Emerald = {
-		color = Color3.fromRGB(0,255,128)
-	},
 
-	Amethyst = {
-		color = Color3.fromRGB(113, 57, 255)
-	},
-
-	Rainbow = {
-		color = Color3.fromRGB(255, 42, 14)
-	}
-}
 
 local mcmd = require(game:GetService("ReplicatedStorage").Library.Client.MiningCmds)
 local bwc = require(game:GetService("ReplicatedStorage").Library.Client.MiningCmds.BlockWorldClient)
@@ -31,48 +19,77 @@ local Window = WindUI:CreateWindow({
 })
 
 local farm = Window:Tab({Title = 'Farm'})
+local xray = Window:Tab({Title = "XRay"})
 
+if getgenv().wtools ~= nil then
+	pcall(function()
+		for i,v in pairs(getgenv().wtools.ores) do
+			v:Destroy()
+		end
+	end)
+end
 
+local ores = {}
+local ores_id = {}
+for i,v in pairs(game:GetService("ReplicatedStorage").__DIRECTORY.Blocks:GetChildren()) do
+	if v.Name:find("Ore") then
+		local id = require(v).DisplayName:split(" ")[1]
+		ores[id] = require(v)
+		table.insert(ores_id, id)
+	end
+end
+local cache = Instance.new("Folder")
+getgenv().wtools = {
+	ores = {}
+}
 
 local data = {
 	mining = false,
 	center = false,
-	
+	xray = false,
+	xores = {}
 }
 local scan = false
-local rad = 8
+local rad = 10
+local mode = "Default"
 
 
 local cmd = require(game:GetService("ReplicatedStorage").Library.Client.MiningCmds)
-
+local lcl = bwc.GetLocal()
+spawn(function()
+	while task.wait(0.1) do
+		lcl = bwc.GetLocal()
+	end
+end)
 farm:Toggle({
 	Title = "Auto farm",
 	Callback = function(val)
 		data.mining = val
 
-		local blocks = bwc.GetLocal()
+		local blocks = lcl
 		local center_block = nil
 		if blocks ~= nil and val then
 			local player = game.Players.LocalPlayer
-			
+
 			if data.center then
 				local center_block = nil
 				for i = 0, 128 do
 					local pos = Vector3int16.new(0, -i, 0)
 					center_block = blocks:GetBlock(pos)
-					
+
 					if center_block ~= nil then
 						break
 					end
 				end
-				
+
 				if center_block ~= nil then
 					player.Character:SetPrimaryPartCFrame(center_block.Part.CFrame + Vector3.new(0, 4, 0))
 				end
 			end
-			
+
 			local current_block = center_block or mcmd.GetBlockUnderPlayer()
-			local function GetTimeToBreak(block)
+			local function GetTimeToBreak(block, extra)
+				local extra = extra or 0
 				local blockStrength = block:GetDirectory().Strength
 
 				local selectedPickaxe = MiningUtil.GetSelectedPickaxe(player)
@@ -86,11 +103,92 @@ farm:Toggle({
 				local miningSpeed = MiningUtil.ComputeSpeed(player, selectedPickaxe)
 				local dps = damagePerHit * miningSpeed
 
-				return blockStrength / dps
+				return blockStrength / dps + 0.001 + player:GetNetworkPing() / 5 + extra
+			end
+
+			local function GetBlockUnder(pos)
+				local x = pos.X
+				local y = pos.Y
+				local z = pos.Z
+
+				local new_block = blocks:GetBlock(Vector3int16.new(x,y,z))
+				if new_block == nil then
+					repeat
+						task.wait()
+						y += 1
+						new_block = blocks:GetBlock(Vector3int16.new(x,y,z))
+					until y > 128 or new_block ~= nil
+				end
+
+				return new_block
 			end
 
 
-			if current_block ~= nil then
+
+
+			if current_block ~= nil and mode == "Slices" then
+				local reqY = 0
+				local checked = false
+				local rblocks = {}
+
+				while data.mining do
+					task.wait(0.01)
+
+					table.clear(rblocks)
+					for x = -17, 17 do
+						for z = -17, 17 do
+							local rblock = blocks:GetBlock(Vector3int16.new(x, reqY, z))
+							if rblock ~= nil then
+								table.insert(rblocks, rblock)
+							end
+						end
+					end
+
+
+					for i,v in pairs(rblocks) do
+						if data.mining == false then
+							break
+						end
+						pcall(function()
+							local function destroy()
+								local b = 0
+								if checked == "on pending" then
+									b += 0.025
+								end
+
+								if (player.Character.PrimaryPart.Position - v.Part.Position).Magnitude > 25 then
+									task.wait(0.01)
+									b += 0.01
+								end
+
+								local cd = GetTimeToBreak(v, b)
+								game.Players.LocalPlayer.Character:SetPrimaryPartCFrame(v.Part.CFrame + Vector3.new(0, 5, 0))
+								task.wait(cd / 3)
+								game:GetService("ReplicatedStorage"):WaitForChild("Network"):WaitForChild("BlockWorlds_Target"):FireServer(v.Pos)
+								task.wait(cd)
+								game:GetService("ReplicatedStorage"):WaitForChild("Network"):WaitForChild("BlockWorlds_Break"):FireServer(v.Pos)
+								task.wait(cd / 3)
+							end
+
+							destroy()
+							destroy()
+						end)
+					end
+
+					if checked == true then
+						reqY -= 1
+						checked = false
+					elseif checked == false then
+						checked = "on pending"
+					elseif checked == "on pending" then
+						checked = true
+					end
+
+				end
+
+			end
+
+			if current_block ~= nil and mode == "Default" then
 				local pos = current_block.Pos
 				local c = 0
 				local r2 = rad / 2
@@ -111,7 +209,7 @@ farm:Toggle({
 							local new_block = blocks:GetBlock(pos)
 
 							if new_block ~= nil then
-								local cd = GetTimeToBreak(new_block) + 0.001
+								local cd = GetTimeToBreak(new_block, 0)
 								game:GetService("ReplicatedStorage"):WaitForChild("Network"):WaitForChild("BlockWorlds_Target"):FireServer(pos)
 								task.wait(cd)
 								game:GetService("ReplicatedStorage"):WaitForChild("Network"):WaitForChild("BlockWorlds_Break"):FireServer(pos)
@@ -130,5 +228,78 @@ farm:Toggle({
 	Title = "Teleport to center",
 	Callback = function(val)
 		data.center = val
+	end,
+})
+
+farm:Dropdown({
+	Title = "Mining mode",
+	Values = { "Default", "Slices"},
+	Value = "Default",
+	Callback = function(val)
+		mode = val
+	end
+})
+
+xray:Dropdown({
+	Title = "XRay Ores",
+	Values = ores_id,
+	Value = {},
+	Multi = true,
+	AllowNone = true,
+
+	Callback = function(val)
+		data.xores = val
+	end,
+})
+
+xray:Toggle({
+	Title = "Enable xray",
+	Callback = function(val)
+
+		data.xray = val
+
+		for i,v in pairs(getgenv().wtools.ores) do
+			v:Destroy()
+		end
+
+
+		while data.xray do
+			task.wait(0.2)
+            for i,v in pairs(getgenv().wtools.ores) do
+			v:Destroy()
+		end
+
+			if lcl ~= nil then
+				pcall(function()
+					for i,v in pairs(lcl.Blocks) do
+						local suc, err = pcall(function()
+							local part = v.Part
+							local id = part:GetAttribute("id")
+
+							if table.find(data.xores, id) then
+								local module_data = ores[id] 
+								local color = module_data.ParticleColor or Color3.fromRGB(255,255,255)		
+
+								local render = Instance.new("BillboardGui", part)
+								render.AlwaysOnTop = true
+								render.Adornee = part
+								render.Size = UDim2.fromScale(part.Size.X, part.Size.Y)
+
+								local text = Instance.new("TextLabel", render)
+								text.Size = UDim2.fromScale(1,1)
+								text.BackgroundColor3 = color
+								text.BackgroundTransparency = 0.5
+								text.TextScaled = true
+								text.Text = id
+								text.TextColor3 = Color3.fromRGB(47, 47, 46)
+
+								table.insert(getgenv().wtools.ores, render)
+							end
+						end)
+					end
+				end)
+			end
+			
+		end
 	end,
 })
