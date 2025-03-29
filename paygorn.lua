@@ -56,11 +56,13 @@ local mode = "Default"
 
 local cmd = require(game:GetService("ReplicatedStorage").Library.Client.MiningCmds)
 local lcl = bwc.GetLocal()
+
 spawn(function()
 	while task.wait(0.1) do
 		lcl = bwc.GetLocal()
 	end
 end)
+
 farm:Toggle({
 	Title = "Auto farm",
 	Callback = function(val)
@@ -132,11 +134,13 @@ farm:Toggle({
 				local rblocks = {}
 
 				while data.mining do
-					task.wait(0.01)
+					if math.random(1, 15) ==1  then
+						task.wait()
+					end
 
 					table.clear(rblocks)
-					for x = -17, 17 do
-						for z = -17, 17 do
+					for z = -17, 17 do
+						for x = -17, 17 do
 							local rblock = blocks:GetBlock(Vector3int16.new(x, reqY, z))
 							if rblock ~= nil then
 								table.insert(rblocks, rblock)
@@ -150,39 +154,30 @@ farm:Toggle({
 							break
 						end
 						pcall(function()
-							local function destroy()
+							local function destroy(bns, tp)
+								tp = tp or true
+								bns = bns or Vector3int16.new(0,0,0)
 								local b = 0
-								if checked == "on pending" then
-									b += 0.025
-								end
-
-								if (player.Character.PrimaryPart.Position - v.Part.Position).Magnitude > 25 then
-									task.wait(0.01)
-									b += 0.01
-								end
-
+								local r = math.random(1,5)
 								local cd = GetTimeToBreak(v, b)
-								game.Players.LocalPlayer.Character:SetPrimaryPartCFrame(v.Part.CFrame + Vector3.new(0, 5, 0))
-								task.wait(cd / 3)
+								if tp then
+									game.Players.LocalPlayer.Character:SetPrimaryPartCFrame(v.Part.CFrame + Vector3.new(0, 5, 0))
+								end
 								game:GetService("ReplicatedStorage"):WaitForChild("Network"):WaitForChild("BlockWorlds_Target"):FireServer(v.Pos)
-								task.wait(cd)
+								task.wait(cd/r)
+								
 								game:GetService("ReplicatedStorage"):WaitForChild("Network"):WaitForChild("BlockWorlds_Break"):FireServer(v.Pos)
-								task.wait(cd / 3)
 							end
 
 							destroy()
-							destroy()
 						end)
 					end
-
-					if checked == true then
+					
+					if #rblocks == 0 then
 						reqY -= 1
-						checked = false
-					elseif checked == false then
-						checked = "on pending"
-					elseif checked == "on pending" then
-						checked = true
 					end
+
+					
 
 				end
 
@@ -196,6 +191,10 @@ farm:Toggle({
 					if not data.mining then
 						break
 					end
+					local maxX = pos.X + r2
+					local minX = pos.X - r2 + 1
+					local maxZ = pos.Z + r2
+					local minZ = pos.Z - r2 + 1
 					for x = pos.X - r2 + 1, pos.X + r2 do
 						if not data.mining then
 							break
@@ -207,13 +206,35 @@ farm:Toggle({
 
 							local pos = Vector3int16.new(x,-y,z)
 							local new_block = blocks:GetBlock(pos)
-
-							if new_block ~= nil then
+							
+							local function breakblock(pos)
+								local new_block = blocks:GetBlock(pos)
+								if new_block == nil then
+									return
+								end
 								local cd = GetTimeToBreak(new_block, 0)
 								game:GetService("ReplicatedStorage"):WaitForChild("Network"):WaitForChild("BlockWorlds_Target"):FireServer(pos)
 								task.wait(cd)
 								game:GetService("ReplicatedStorage"):WaitForChild("Network"):WaitForChild("BlockWorlds_Break"):FireServer(pos)
-
+							end
+							if new_block ~= nil then
+								breakblock(pos)
+								local function wclip(coord, b)
+									if coord == "x" then
+										if x + b <= maxX and x + b >= minX then
+											breakblock(Vector3int16.new(x + b, -y, z))
+										end
+									elseif coord == "z" then
+										if z + b <= maxZ and z + b >= minZ then
+											breakblock(Vector3int16.new(x, -y, z + b))
+										end
+									
+									end
+								end
+								
+								wclip("x", 1)
+								wclip("x", 2)
+								wclip("z", 1)
 							end
 						end
 					end
@@ -257,7 +278,7 @@ xray:Toggle({
 	Callback = function(val)
 
 		data.xray = val
-
+		local blocks = bwc.GetLocal()
 		while not data.xray do
 			for i,v in pairs(getgenv().wtools.ores) do
 				v:Destroy()
@@ -273,7 +294,7 @@ xray:Toggle({
 
 			if lcl ~= nil then
 				pcall(function()
-					for i,v in pairs(lcl.Blocks) do
+					for i,v in pairs(blocks) do
 						local suc, err = pcall(function()
 							local part = v.Part
 							local id = part:GetAttribute("id")
