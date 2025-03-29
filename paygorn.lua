@@ -258,16 +258,18 @@ xray:Toggle({
 
 		data.xray = val
 
-		for i,v in pairs(getgenv().wtools.ores) do
-			v:Destroy()
+		while not data.xray do
+			for i,v in pairs(getgenv().wtools.ores) do
+				v:Destroy()
+			end
+			task.wait()
 		end
-
 
 		while data.xray do
 			task.wait(0.2)
-            for i,v in pairs(getgenv().wtools.ores) do
-			v:Destroy()
-		end
+			for i,v in pairs(getgenv().wtools.ores) do
+				v:Destroy()
+			end
 
 			if lcl ~= nil then
 				pcall(function()
@@ -300,6 +302,8 @@ xray:Toggle({
 				end)
 			end
 			
+			
+
 		end
 	end,
 })
