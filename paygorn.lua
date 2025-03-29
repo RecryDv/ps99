@@ -1,5 +1,5 @@
 
-
+local save = require(game:GetService("ReplicatedStorage").Library.Client.Save)
 local mcmd = require(game:GetService("ReplicatedStorage").Library.Client.MiningCmds)
 local bwc = require(game:GetService("ReplicatedStorage").Library.Client.MiningCmds.BlockWorldClient)
 local MiningUtil = require(game.ReplicatedStorage.Library.Util.MiningUtil)
@@ -10,10 +10,10 @@ local Window = WindUI:CreateWindow({
 	Icon = "door-open",
 	Author = "by sh0vel",
 	Folder = "gayhub",
-	Size = UDim2.fromOffset(640, 460),
+	Size = UDim2.fromOffset(780, 460),
 	Transparent = false,
 	Theme = "Dark",
-	SideBarWidth = 180,
+	SideBarWidth = 120,
 	--Background = "rbxassetid://13511292247", -- rbxassetid only
 	HasOutline = true
 })
@@ -44,6 +44,35 @@ local function isOre(id)
 	
 	return false
 end
+
+
+local mining_event_items_short = {
+	tnts = {"Bejeweled TNT", "Bomb", "Nuclear TNT", "TNT", "TNT Crate"}
+}
+
+local mining_event_items_dec = {
+	tnts = {
+		["Bejeweled TNT"] = "Mining Bejeweled TNT Crate",
+		["Bomb"] = "Mining Bomb",
+		["Nuclear TNT"] = "Mining Nuclear TNT Crate",
+		["TNT"] = "Mining TNT",
+		["TNT Crate"] = "Mining TNT Crate"
+	}
+}
+
+local function dec_short_names(tbl_id, val)
+	local new_tbl = {}
+	
+	for i,v in pairs(mining_event_items_short[tbl_id]) do
+		if table.find(val, v) then
+			table.insert(new_tbl, mining_event_items_dec[tbl_id][v])
+		end
+	end
+	
+	return new_tbl
+end
+
+
 for i,v in pairs(game:GetService("ReplicatedStorage").__DIRECTORY.Blocks:GetChildren()) do
 	if v.Name:find("Ore") then
 		local id = require(v).DisplayName:split(" ")[1]
@@ -61,6 +90,8 @@ local data = {
 	center = false,
 	xray = false,
 	merchant = false,
+	only_ores_tnt = {},
+	only_ores_tnt_chance = 0,
 	xores = {}
 }
 local scan = false
@@ -201,18 +232,23 @@ farm:Toggle({
 				local y = 0
 				
 				local function destroy(blc)
-					local block = blc
-					local cd = GetTimeToBreak(block)
-					game.Players.LocalPlayer.Character:SetPrimaryPartCFrame(block.Part.CFrame + Vector3.new(0, 2.5, 0))
-					task.wait(0.01)
-					game:GetService("ReplicatedStorage"):WaitForChild("Network"):WaitForChild("BlockWorlds_Target"):FireServer(block.Pos)
-					task.wait(cd + 0.02)
-					game:GetService("ReplicatedStorage"):WaitForChild("Network"):WaitForChild("BlockWorlds_Break"):FireServer(block.Pos)
+					local id = blc.Part:GetAttribute("id")
+					
+					if isOre(id) then
+						task.wait(0.05)
+					end
+					local cd = GetTimeToBreak(blc)
+					game.Players.LocalPlayer.Character:SetPrimaryPartCFrame(blc.Part.CFrame + Vector3.new(0, 5, 0))
+					task.wait(0.02)
+					if isOre(id) then
+						task.wait(0.1)
+					end
+					game:GetService("ReplicatedStorage"):WaitForChild("Network"):WaitForChild("BlockWorlds_Target"):FireServer(blc.Pos)
+					task.wait(cd + 0.1)
+					game:GetService("ReplicatedStorage"):WaitForChild("Network"):WaitForChild("BlockWorlds_Break"):FireServer(blc.Pos)
 				end
 				
-				local done = false
-				local found = false
-				while data.mining or done do
+				while data.mining  do
 					task.wait()
 					local temp_ores = {}
 					for i,v in pairs(blocks.Blocks) do
@@ -241,11 +277,40 @@ farm:Toggle({
 									local id = block.Part:GetAttribute("id")
 
 									if not isOre(id) then
-										destroy(block)
-										local rnd_block = blocks:GetBlock(Vector3int16.new(x, y - 1, z))
+										local rng = math.random(0, 100)
+										print(data.only_ores_tnt_chance > rng)
+										if data.only_ores_tnt_chance > rng then
+											local save = save.GetSaves()[player]
+											if save ~= nil then
+												local consumables = save.Inventory.Consumable
+												for i,v in pairs(consumables) do
+													print(v.id)
+													if table.find(data.only_ores_tnt, v.id) then
+														local id = i
+														game.Players.LocalPlayer.Character:SetPrimaryPartCFrame(block.Part.CFrame + Vector3.new(0, 5, 0))
+														local function spawn()
+															local args = {
+																[1] = i,
+																[2] = 1
+															}
 
-										if rnd_block ~= nil then
-											destroy(rnd_block)
+															game:GetService("ReplicatedStorage"):WaitForChild("Network"):WaitForChild("Consumables_Consume"):InvokeServer(unpack(args))
+
+														end
+														
+														spawn()
+														break
+													end
+												end
+											end
+										elseif data.only_ores_tnt_chance <= rng then
+											destroy(block)
+											local other_block = Vector3int16.new(x, y - 1, z)
+											other_block = blocks:GetBlock(other_block)
+											
+											if other_block ~= nil then
+												destroy(other_block)
+											end
 										end
 
 									end
@@ -258,18 +323,17 @@ farm:Toggle({
 									local id = v.Part:GetAttribute("id")
 
 									if not isOre(id) then
-										found = true
 										v.Part:Destroy()
 									end
 								end
 							end
 						end
-						if not found then
-							done = true
-						end
 						y -= 2
 					elseif #temp_ores > 0 then
 						for i,v in pairs(temp_ores) do
+							if not data.mining then
+								break
+							end
 							destroy(v)
 						end
 					end
@@ -359,6 +423,36 @@ farm:Dropdown({
 		mode = val
 	end
 })
+
+farm:Section({
+	Title = "Only ores options"
+})
+
+farm:Dropdown({
+	Title = "Select tnt to use",
+	Multi = true,
+	AllowNone = true,
+	Values = mining_event_items_short.tnts,
+	Value = {},
+	Callback = function(val)
+		data.only_ores_tnt = dec_short_names("tnts", val)
+	end,
+})
+
+farm:Slider({
+	Title = "TNT Use chance",
+	Value = {
+		Min = 0,
+		Max = 100,
+		Default = 0,
+	},
+	
+	Callback = function(val)
+		data.only_ores_tnt_chance = val
+	end,
+})
+
+
 
 xray:Dropdown({
 	Title = "XRay Ores",
