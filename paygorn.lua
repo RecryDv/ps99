@@ -20,6 +20,7 @@ local Window = WindUI:CreateWindow({
 
 local farm = Window:Tab({Title = 'Farm'})
 local xray = Window:Tab({Title = "XRay"})
+local merchant = Window:Tab({Title = "Merchant"})
 
 if getgenv().wtools ~= nil then
 	pcall(function()
@@ -31,6 +32,18 @@ end
 
 local ores = {}
 local ores_id = {}
+
+local function isOre(id)
+	if table.find(ores_id, id) then
+		return true
+	end
+	
+	if string.lower(id):find("chest") then
+		return true
+	end
+	
+	return false
+end
 for i,v in pairs(game:GetService("ReplicatedStorage").__DIRECTORY.Blocks:GetChildren()) do
 	if v.Name:find("Ore") then
 		local id = require(v).DisplayName:split(" ")[1]
@@ -47,6 +60,7 @@ local data = {
 	mining = false,
 	center = false,
 	xray = false,
+	merchant = false,
 	xores = {}
 }
 local scan = false
@@ -158,7 +172,7 @@ farm:Toggle({
 								tp = tp or true
 								bns = bns or Vector3int16.new(0,0,0)
 								local b = 0
-								local r = math.random(1,5)
+								local r = math.random(1,3)
 								local cd = GetTimeToBreak(v, b)
 								if tp then
 									game.Players.LocalPlayer.Character:SetPrimaryPartCFrame(v.Part.CFrame + Vector3.new(0, 5, 0))
@@ -181,6 +195,91 @@ farm:Toggle({
 
 				end
 
+			end
+			
+			if current_block ~= nil and mode == "Only ores" then
+				local y = 0
+				
+				local function destroy(blc)
+					local block = blc
+					local cd = GetTimeToBreak(block)
+					game.Players.LocalPlayer.Character:SetPrimaryPartCFrame(block.Part.CFrame + Vector3.new(0, 2.5, 0))
+					task.wait(0.01)
+					game:GetService("ReplicatedStorage"):WaitForChild("Network"):WaitForChild("BlockWorlds_Target"):FireServer(block.Pos)
+					task.wait(cd + 0.02)
+					game:GetService("ReplicatedStorage"):WaitForChild("Network"):WaitForChild("BlockWorlds_Break"):FireServer(block.Pos)
+				end
+				
+				local done = false
+				local found = false
+				while data.mining or done do
+					task.wait()
+					local temp_ores = {}
+					for i,v in pairs(blocks.Blocks) do
+						pcall(function()
+							local id = v.Part:GetAttribute("id")
+							
+							if isOre(id) then
+								table.insert(temp_ores, v)
+							end
+						end)
+					end
+					
+					
+					
+					if #temp_ores == 0 then
+						for z = -16, 16, 2 do
+							if not data.mining then
+								break
+							end
+							for x = -16, 16, 2 do
+								if not data.mining then
+									break
+								end
+								local block = blocks:GetBlock(Vector3int16.new(x, y, z))
+								if block ~= nil then
+									local id = block.Part:GetAttribute("id")
+
+									if not isOre(id) then
+										destroy(block)
+										local rnd_block = blocks:GetBlock(Vector3int16.new(x, y - 1, z))
+
+										if rnd_block ~= nil then
+											destroy(rnd_block)
+										end
+
+									end
+								end
+							end
+						end
+						if data.mining then
+							for i,v in pairs(blocks.Blocks) do
+								if v.Pos.Y == y - 1 or v.Pos.Y == y or v.Pos.Y > y + 1 then
+									local id = v.Part:GetAttribute("id")
+
+									if not isOre(id) then
+										found = true
+										v.Part:Destroy()
+									end
+								end
+							end
+						end
+						if not found then
+							done = true
+						end
+						y -= 2
+					elseif #temp_ores > 0 then
+						for i,v in pairs(temp_ores) do
+							destroy(v)
+						end
+					end
+					
+					
+				end
+				
+				
+				
+			
 			end
 
 			if current_block ~= nil and mode == "Default" then
@@ -254,7 +353,7 @@ farm:Toggle({
 
 farm:Dropdown({
 	Title = "Mining mode",
-	Values = { "Default", "Slices"},
+	Values = { "Default", "Slices", "Only ores"},
 	Value = "Default",
 	Callback = function(val)
 		mode = val
@@ -325,6 +424,28 @@ xray:Toggle({
 			
 			
 
+		end
+	end,
+})
+
+merchant:Toggle({
+	Title = "Auto buy mine merchant",
+	
+	Callback = function(val)
+		data.merchant = val
+		
+		while data.merchant do
+			task.wait(1)
+			for i = 1, 6 do
+				task.wait(0.1)
+				local args = {
+					[1] = "MiningMerchant",
+					[2] = i
+				}
+
+				game:GetService("ReplicatedStorage"):WaitForChild("Network"):WaitForChild("Merchant_RequestPurchase"):InvokeServer(unpack(args))
+
+			end
 		end
 	end,
 })
