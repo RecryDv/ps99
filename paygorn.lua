@@ -103,7 +103,7 @@ farm:Toggle({
 				local miningSpeed = MiningUtil.ComputeSpeed(player, selectedPickaxe)
 				local dps = damagePerHit * miningSpeed
 
-				return blockStrength / dps + 0.001 + player:GetNetworkPing() / 5 + extra
+				return blockStrength / dps + 0.001 + player:GetNetworkPing() / 2.5 + extra
 			end
 
 			local function GetBlockUnder(pos)
