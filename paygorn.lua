@@ -19,7 +19,6 @@ local Window = WindUI:CreateWindow({
 })
 
 local farm = Window:Tab({Title = 'Farm'})
-local xray = Window:Tab({Title = "XRay"})
 local merchant = Window:Tab({Title = "Merchant"})
 
 if getgenv().wtools ~= nil then
@@ -88,11 +87,10 @@ getgenv().wtools = {
 local data = {
 	mining = false,
 	center = false,
-	xray = false,
+	center_start_y_zero = true,
 	merchant = false,
 	only_ores_tnt = {},
 	only_ores_tnt_chance = 0,
-	xores = {}
 }
 local scan = false
 local rad = 10
@@ -140,7 +138,7 @@ farm:Toggle({
 				local player = game.Players.LocalPlayer
 				local blockStrength = block:GetDirectory().Strength
 
-				
+
 				local selectedPickaxe = MiningUtil.GetSelectedPickaxe(player)
 				local bestPickaxe = MiningUtil.GetBestPickaxe(player, true)
 
@@ -148,7 +146,7 @@ farm:Toggle({
 					return 0
 				end
 
-				
+
 				local damagePerHit = MiningUtil.ComputeDamage(player, selectedPickaxe, bestPickaxe, block:GetDirectory())
 				local miningSpeed = MiningUtil.ComputeSpeed(player, selectedPickaxe)
 				local dps = damagePerHit * miningSpeed
@@ -157,7 +155,7 @@ farm:Toggle({
 				local pingCompensation = player:GetNetworkPing() / 2 
 				local totalTime = baseTime + 0.001 + pingCompensation + extra
 
-				
+
 				local randomFactor = 1 + (math.random() * 0.05 - 0.025) 
 				totalTime = totalTime * randomFactor
 
@@ -187,10 +185,30 @@ farm:Toggle({
 				local reqY = 0
 				local checked = false
 				local rblocks = {}
+				
+				if data.center_start_y_zero == false then
+					reqY = current_block.Pos.Y
+					print(reqY)
+				end
 
 				while data.mining do
 					if math.random(1, 15) ==1  then
 						task.wait()
+					end
+					
+					local function destroy(v, bns, tp)
+						tp = tp or true
+						bns = bns or Vector3int16.new(0,0,0)
+						local b = 0
+						local r = math.random(1,3)
+						local cd = GetTimeToBreak(v, b)
+						if tp then
+							game.Players.LocalPlayer.Character:SetPrimaryPartCFrame(v.Part.CFrame + Vector3.new(0, 5, 0))
+						end
+						game:GetService("ReplicatedStorage"):WaitForChild("Network"):WaitForChild("BlockWorlds_Target"):FireServer(v.Pos)
+						task.wait(cd/r)
+
+						game:GetService("ReplicatedStorage"):WaitForChild("Network"):WaitForChild("BlockWorlds_Break"):FireServer(v.Pos)
 					end
 
 					table.clear(rblocks)
@@ -209,22 +227,7 @@ farm:Toggle({
 							break
 						end
 						pcall(function()
-							local function destroy(bns, tp)
-								tp = tp or true
-								bns = bns or Vector3int16.new(0,0,0)
-								local b = 0
-								local r = math.random(1,3)
-								local cd = GetTimeToBreak(v, b)
-								if tp then
-									game.Players.LocalPlayer.Character:SetPrimaryPartCFrame(v.Part.CFrame + Vector3.new(0, 5, 0))
-								end
-								game:GetService("ReplicatedStorage"):WaitForChild("Network"):WaitForChild("BlockWorlds_Target"):FireServer(v.Pos)
-								task.wait(cd/r)
-
-								game:GetService("ReplicatedStorage"):WaitForChild("Network"):WaitForChild("BlockWorlds_Break"):FireServer(v.Pos)
-							end
-
-							destroy()
+							destroy(v)
 						end)
 					end
 
@@ -253,101 +256,146 @@ farm:Toggle({
 						task.wait(0.1)
 					end
 					game:GetService("ReplicatedStorage"):WaitForChild("Network"):WaitForChild("BlockWorlds_Target"):FireServer(blc.Pos)
-					task.wait(cd + 0.02)
+					task.wait(cd + 0.005)
 					game:GetService("ReplicatedStorage"):WaitForChild("Network"):WaitForChild("BlockWorlds_Break"):FireServer(blc.Pos)
 				end
 
-				while data.mining  do
-					task.wait()
-					local temp_ores = {}
-					for i,v in pairs(blocks.Blocks) do
-						pcall(function()
-							local id = v.Part:GetAttribute("id")
-
-							if isOre(id) then
-								table.insert(temp_ores, v)
-							end
-						end)
+				while task.wait() do
+					if not data.mining then
+						break
 					end
+					
+					while data.mining  do
+						task.wait()
+						local temp_ores = {}
+						for i,v in pairs(blocks.Blocks) do
+							pcall(function()
+								local id = v.Part:GetAttribute("id")
 
+								if isOre(id) then
+									table.insert(temp_ores, v)
+								end
+							end)
+						end
 
+						local smth_found = false
 
-					if #temp_ores == 0 then
-						for z = -16, 16, 2 do
-							if not data.mining then
-								break
+						if #temp_ores == 0 then
+							local function remove_border(pos)
+								local bblock = blocks:GetBlock(pos)
+
+								if bblock ~= nil then
+									destroy(bblock)
+								end
 							end
-							for x = -16, 16, 2 do
+
+							remove_border(Vector3int16.new(-8, y, -8))
+							remove_border(Vector3int16.new(7, y, -8))
+							remove_border(Vector3int16.new(7, y, 7))
+							remove_border(Vector3int16.new(-8, y, 7))
+
+							for z = -18, 18, 2 do
 								if not data.mining then
 									break
 								end
-								local block = blocks:GetBlock(Vector3int16.new(x, y, z))
-								if block ~= nil then
-									local id = block.Part:GetAttribute("id")
+								for x = -18, 18, 2 do
+									if not data.mining then
+										break
+									end
+									local block = blocks:GetBlock(Vector3int16.new(x, y, z))
+									if block ~= nil then
+										smth_found = true
+										local id = block.Part:GetAttribute("id")
 
-									if not isOre(id) then
-										local rng = math.random(0, 100)
-										print(data.only_ores_tnt_chance > rng)
-										if data.only_ores_tnt_chance > rng then
-											local save = save.GetSaves()[player]
-											if save ~= nil then
-												local consumables = save.Inventory.Consumable
-												for i,v in pairs(consumables) do
-													print(v.id)
-													if table.find(data.only_ores_tnt, v.id) then
-														local id = i
-														game.Players.LocalPlayer.Character:SetPrimaryPartCFrame(block.Part.CFrame + Vector3.new(0, 5, 0))
-														local function spawn()
-															local args = {
-																[1] = i,
-																[2] = 1
-															}
+										if not isOre(id) then
+											local rng = math.random(0, 100)
+											if data.only_ores_tnt_chance > rng then
+												local save = save.GetSaves()[player]
+												if save ~= nil then
+													local consumables = save.Inventory.Consumable
+													for i,v in pairs(consumables) do
+														if table.find(data.only_ores_tnt, v.id) then
+															local id = i
+															game.Players.LocalPlayer.Character:SetPrimaryPartCFrame(block.Part.CFrame + Vector3.new(0, 5, 0))
+															local function spawn()
+																local args = {
+																	[1] = i,
+																	[2] = 1
+																}
 
-															game:GetService("ReplicatedStorage"):WaitForChild("Network"):WaitForChild("Consumables_Consume"):InvokeServer(unpack(args))
+																game:GetService("ReplicatedStorage"):WaitForChild("Network"):WaitForChild("Consumables_Consume"):InvokeServer(unpack(args))
 
+															end
+
+															spawn()
+															break
 														end
-
-														spawn()
-														break
 													end
 												end
-											end
-										elseif data.only_ores_tnt_chance <= rng then
-											destroy(block)
-											local other_block = Vector3int16.new(x, y - 1, z)
-											other_block = blocks:GetBlock(other_block)
+											elseif data.only_ores_tnt_chance <= rng then
+												destroy(block)
+												local other_block = Vector3int16.new(x, y - 1, z)
+												other_block = blocks:GetBlock(other_block)
 
-											if other_block ~= nil then
-												destroy(other_block)
+												if other_block ~= nil then
+													destroy(other_block)
+												end
+
+												local other_block2 = Vector3int16.new(x + 1, y, z + 1)
+												other_block2 = blocks:GetBlock(other_block2)
+
+												if other_block2 ~= nil then
+													destroy(other_block2)
+												end
+
+												local other_block3 = Vector3int16.new(x + 1, y - 1, z + 1)
+												other_block3 = blocks:GetBlock(other_block3)
+
+												if other_block3 ~= nil then
+													destroy(other_block3)
+												end
+
 											end
+
 										end
-
 									end
 								end
 							end
-						end
-						if data.mining then
-							for i,v in pairs(blocks.Blocks) do
-								if v.Pos.Y == y - 1 or v.Pos.Y == y or v.Pos.Y > y + 1 then
-									local id = v.Part:GetAttribute("id")
 
-									if not isOre(id) then
-										v.Part:Destroy()
+
+							if data.mining and smth_found then
+								for i,v in pairs(blocks.Blocks) do
+									if v.Pos.Y == y - 1 or v.Pos.Y == y or v.Pos.Y > y + 1 then
+										local id = v.Part:GetAttribute("id")
+
+										if not isOre(id) then
+											v.Part:Destroy()
+										end
 									end
 								end
 							end
-						end
-						y -= 2
-					elseif #temp_ores > 0 then
-						for i,v in pairs(temp_ores) do
-							if not data.mining then
+							local fnd = false
+							if mcmd.GetBlockUnderPlayer() ~= nil then
+								fnd = true
+							end
+							
+							if not fnd then
+								y = 0
 								break
 							end
-							destroy(v)
+							y -= 2
+						elseif #temp_ores > 0 then
+							for i,v in pairs(temp_ores) do
+								if not data.mining then
+									break
+								end
+								destroy(v)
+							end
 						end
+
+
 					end
-
-
+					
 				end
 
 
@@ -434,6 +482,18 @@ farm:Dropdown({
 })
 
 farm:Section({
+	Title = "Slices mode options"
+})
+
+farm:Toggle({
+	Title = "Start at 0 y",
+	
+	Callback = function(val)
+		data.center_start_y_zero = val
+	end,
+})
+
+farm:Section({
 	Title = "Only ores options"
 })
 
@@ -463,73 +523,7 @@ farm:Slider({
 
 
 
-xray:Dropdown({
-	Title = "XRay Ores",
-	Values = ores_id,
-	Value = {},
-	Multi = true,
-	AllowNone = true,
 
-	Callback = function(val)
-		data.xores = val
-	end,
-})
-
-xray:Toggle({
-	Title = "Enable xray",
-	Callback = function(val)
-
-		data.xray = val
-		local blocks = bwc.GetLocal()
-		while not data.xray do
-			for i,v in pairs(getgenv().wtools.ores) do
-				v:Destroy()
-			end
-			task.wait()
-		end
-
-		while data.xray do
-			task.wait(0.2)
-			for i,v in pairs(getgenv().wtools.ores) do
-				v:Destroy()
-			end
-
-			if lcl ~= nil then
-				pcall(function()
-					for i,v in pairs(blocks) do
-						local suc, err = pcall(function()
-							local part = v.Part
-							local id = part:GetAttribute("id")
-
-							if table.find(data.xores, id) then
-								local module_data = ores[id] 
-								local color = module_data.ParticleColor or Color3.fromRGB(255,255,255)		
-
-								local render = Instance.new("BillboardGui", part)
-								render.AlwaysOnTop = true
-								render.Adornee = part
-								render.Size = UDim2.fromScale(part.Size.X, part.Size.Y)
-
-								local text = Instance.new("TextLabel", render)
-								text.Size = UDim2.fromScale(1,1)
-								text.BackgroundColor3 = color
-								text.BackgroundTransparency = 0.5
-								text.TextScaled = true
-								text.Text = id
-								text.TextColor3 = Color3.fromRGB(47, 47, 46)
-
-								table.insert(getgenv().wtools.ores, render)
-							end
-						end)
-					end
-				end)
-			end
-
-
-
-		end
-	end,
-})
 
 merchant:Toggle({
 	Title = "Auto buy mine merchant",
