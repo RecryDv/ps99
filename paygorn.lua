@@ -1,29 +1,68 @@
+local Network = require(game:GetService("ReplicatedStorage").Library.Client.Network)
+local saveModule = require(game:GetService("ReplicatedStorage").Library.Client.Save)
+local save = {}
 
-local save = require(game:GetService("ReplicatedStorage").Library.Client.Save)
 local mcmd = require(game:GetService("ReplicatedStorage").Library.Client.MiningCmds)
 local bwc = require(game:GetService("ReplicatedStorage").Library.Client.MiningCmds.BlockWorldClient)
 local MiningUtil = require(game.ReplicatedStorage.Library.Util.MiningUtil)
-local WindUI = loadstring(game:HttpGet("https://tree-hub.vercel.app/api/UI/WindUI"))()
+local comma = require(game:GetService("ReplicatedStorage").Library.Functions.Commas)
+local PlayerPet = require(game:GetService("ReplicatedStorage").Library.Client.PlayerPet)
 
-local Window = WindUI:CreateWindow({
-	Title = "SUPER MEGA PET SIM FARM!!",
-	Icon = "door-open",
-	Author = "by sh0vel",
-	Folder = "gayhub",
-	Size = UDim2.fromOffset(780, 460),
-	Transparent = false,
+local Fluent = loadstring(game:HttpGet("https://github.com/dawid-scripts/Fluent/releases/latest/download/main.lua"))()
+
+local cmd = require(game:GetService("ReplicatedStorage").Library.Client.MiningCmds)
+local lcl = bwc.GetLocal()
+
+local saveModule = require(game:GetService("ReplicatedStorage").Library.Client.Save)
+save = saveModule.GetSaves()[game.Players.LocalPlayer]
+
+local Window = Fluent:CreateWindow({
+	Title = "sh0vel prod.",
+	SubTitle = "version 0.2",
+	TabWidth = 185,
+	Size = UDim2.fromOffset(720, 520),
 	Theme = "Dark",
-	SideBarWidth = 120,
-	--Background = "rbxassetid://13511292247", -- rbxassetid only
-	HasOutline = true
+	MinimizeKey = Enum.KeyCode.Delete -- Used when theres no MinimizeKeybind
 })
 
-local farm = Window:Tab({Title = 'Farm'})
-local merchant = Window:Tab({Title = "Merchant"})
+local function client_notification(data)
+	Fluent:Notify(data)
+end
+
+local current_ver = tostring(game:GetService("HttpService"):GenerateGUID(false))
+getgenv().wtools_ver = current_ver
+local function isActualScriptRunning()
+	return getgenv().wtools_ver == current_ver
+end
+
+spawn(function()
+	while task.wait(0.1) do
+		if not isActualScriptRunning() then
+			break
+		end
+		pcall(function()
+			lcl = bwc.GetLocal()
+		end)
+	end
+end)
+
+
+
+local farm = Window:AddTab({Title = "Slime Event", Icon = "check"})
+local pet = Window:AddTab({Title = "Pet", Icon = "cat"})
+local egg = Window:AddTab({Title = "Egg Settings", Icon = "egg"})
+local currency = Window:AddTab({Title = "Currency", Icon = "gem"})
+local conf = Window:AddTab({Title = "Configuration", Icon = "settings"})
 
 if getgenv().wtools ~= nil then
 	pcall(function()
 		for i,v in pairs(getgenv().wtools.ores) do
+			v:Destroy()
+		end
+	end)
+	
+	pcall(function()
+		for i,v in pairs(getgenv().wtools.fake_currency) do
 			v:Destroy()
 		end
 	end)
@@ -42,6 +81,10 @@ local function isOre(id)
 	end
 
 	return false
+end
+
+local function client_notification(data)
+	Fluent:Notify(data)
 end
 
 
@@ -81,468 +124,244 @@ for i,v in pairs(game:GetService("ReplicatedStorage").__DIRECTORY.Blocks:GetChil
 end
 local cache = Instance.new("Folder")
 getgenv().wtools = {
-	ores = {}
+	ores = {},
+	fake_currency = {}
 }
+
 
 local data = {
-	mining = false,
-	center = false,
-	center_start_y_zero = true,
-	merchant = false,
-	only_ores_tnt = {},
-	only_ores_tnt_chance = 0,
+	currency_stat = false,
+	refresh_stat = 60,
+	egg_open = 50,
+	m_event_hatch = false,
+	infinity_pet_speed = false,
 }
+
+local tasks = {
+	["openegg"] = {
+		init = function()
+			local working = false
+
+
+			return {
+				start_open = function(egg, custom)
+					working = true
+
+					spawn(function()
+						if custom then
+							local egg_id = egg.Name
+							while working and isActualScriptRunning() do
+								task.wait()
+								pcall(function()
+									local ret = Network.Invoke("CustomEggs_Hatch", egg_id, math.floor(data.egg_open))
+									local a = 250
+									
+									if ret == false then
+										game.Players.LocalPlayer.Character.PrimaryPart.CFrame = egg.PrimaryPart.CFrame
+										return
+									end
+									repeat
+										task.wait(0.01)
+										a+=1
+									until workspace.CurrentCamera:FindFirstChild("Eggs") or a > 250 or not working or not isActualScriptRunning()
+									for i = 1, 25 do
+										game:GetService("VirtualInputManager"):SendKeyEvent(true, Enum.KeyCode.ButtonA, false, game.Players.LocalPlayer.PlayerGui)
+										task.wait()
+										game:GetService("VirtualInputManager"):SendKeyEvent(false, Enum.KeyCode.ButtonA, false, game.Players.LocalPlayer.PlayerGui)
+									end
+									repeat
+										task.wait()
+									until not workspace.CurrentCamera:FindFirstChild("Eggs") or not working or not isActualScriptRunning()
+								end)
+							end 
+						elseif custom ~= true then
+							
+						end
+					end)
+				end,
+				stop = function()
+					working = false
+				end,
+			}
+		end,
+	}
+} 
+
+local function getWorld()
+	local full = workspace.__THINGS.Eggs:FindFirstChildOfClass("Model").Name
+	return "World "..full:split("World")[2]
+end
+
+local EggSystem = tasks.openegg.init()
+
+
+if not isfolder("sh0velprod") then
+	makefolder("sh0velprod")
+end
+
+if isfile("sh0velprod/Petsimulator99.conf") then
+	local json = readfile("sh0velprod/Petsimulator99.conf")
+	local source = game:GetService("HttpService"):JSONDecode(json)
+	for i,v in pairs(source) do
+		data[i] = v
+	end
+end
+
 local scan = false
 local rad = 10
-local mode = "Default"
 
-
-local cmd = require(game:GetService("ReplicatedStorage").Library.Client.MiningCmds)
-local lcl = bwc.GetLocal()
-
-spawn(function()
-	while task.wait(0.1) do
-		lcl = bwc.GetLocal()
-	end
-end)
-
-farm:Toggle({
-	Title = "Auto farm",
-	Callback = function(val)
-		data.mining = val
-
-		local blocks = lcl
-		local center_block = nil
-		if blocks ~= nil and val then
-			local player = game.Players.LocalPlayer
-
-			if data.center then
-				local center_block = nil
-				for i = 0, 128 do
-					local pos = Vector3int16.new(0, -i, 0)
-					center_block = blocks:GetBlock(pos)
-
-					if center_block ~= nil then
-						break
-					end
-				end
-
-				if center_block ~= nil then
-					player.Character:SetPrimaryPartCFrame(center_block.Part.CFrame + Vector3.new(0, 4, 0))
-				end
-			end
-
-			local current_block = center_block or mcmd.GetBlockUnderPlayer()
-			local function GetTimeToBreak(block, extra)
-				extra = extra or 0
-				local player = game.Players.LocalPlayer
-				local blockStrength = block:GetDirectory().Strength
-
-
-				local selectedPickaxe = MiningUtil.GetSelectedPickaxe(player)
-				local bestPickaxe = MiningUtil.GetBestPickaxe(player, true)
-
-				if not selectedPickaxe or not bestPickaxe then
-					return 0
-				end
-
-
-				local damagePerHit = MiningUtil.ComputeDamage(player, selectedPickaxe, bestPickaxe, block:GetDirectory())
-				local miningSpeed = MiningUtil.ComputeSpeed(player, selectedPickaxe)
-				local dps = damagePerHit * miningSpeed
-
-				local baseTime = blockStrength / dps
-				local pingCompensation = player:GetNetworkPing() / 2 
-				local totalTime = baseTime + 0.001 + pingCompensation + extra
-
-
-				local randomFactor = 1 + (math.random() * 0.05 - 0.025) 
-				totalTime = totalTime * randomFactor
-
-				return math.max(0.025, totalTime)
-			end
-			local function GetBlockUnder(pos)
-				local x = pos.X
-				local y = pos.Y
-				local z = pos.Z
-
-				local new_block = blocks:GetBlock(Vector3int16.new(x,y,z))
-				if new_block == nil then
-					repeat
-						task.wait()
-						y += 1
-						new_block = blocks:GetBlock(Vector3int16.new(x,y,z))
-					until y > 128 or new_block ~= nil
-				end
-
-				return new_block
-			end
-
-
-
-
-			if current_block ~= nil and mode == "Slices" then
-				local reqY = 0
-				local checked = false
-				local rblocks = {}
-				
-				if data.center_start_y_zero == false then
-					reqY = current_block.Pos.Y
-					print(reqY)
-				end
-
-				while data.mining do
-					if math.random(1, 15) ==1  then
-						task.wait()
-					end
-					
-					local function destroy(v, bns, tp)
-						tp = tp or true
-						bns = bns or Vector3int16.new(0,0,0)
-						local b = 0
-						local r = math.random(1,3)
-						local cd = GetTimeToBreak(v, b)
-						if tp then
-							game.Players.LocalPlayer.Character:SetPrimaryPartCFrame(v.Part.CFrame + Vector3.new(0, 5, 0))
-						end
-						game:GetService("ReplicatedStorage"):WaitForChild("Network"):WaitForChild("BlockWorlds_Target"):FireServer(v.Pos)
-						task.wait(cd/r)
-
-						game:GetService("ReplicatedStorage"):WaitForChild("Network"):WaitForChild("BlockWorlds_Break"):FireServer(v.Pos)
-					end
-
-					table.clear(rblocks)
-					for z = -17, 17 do
-						for x = -17, 17 do
-							local rblock = blocks:GetBlock(Vector3int16.new(x, reqY, z))
-							if rblock ~= nil then
-								table.insert(rblocks, rblock)
-							end
-						end
-					end
-
-
-					for i,v in pairs(rblocks) do
-						if data.mining == false then
-							break
-						end
-						pcall(function()
-							destroy(v)
-						end)
-					end
-
-					if #rblocks == 0 then
-						reqY -= 1
-					end
-
-
-
-				end
-
-			end
-
-			if current_block ~= nil and mode == "Only ores" then
-				local y = 0
-
-				local function destroy(blc)
-					local id = blc.Part:GetAttribute("id")
-
-					if isOre(id) then
-						task.wait(0.05)
-					end
-					local cd = GetTimeToBreak(blc)
-					game.Players.LocalPlayer.Character:SetPrimaryPartCFrame(blc.Part.CFrame + Vector3.new(0, 5, 0))
-					if isOre(id) then
-						task.wait(0.1)
-					end
-					game:GetService("ReplicatedStorage"):WaitForChild("Network"):WaitForChild("BlockWorlds_Target"):FireServer(blc.Pos)
-					task.wait(cd + 0.005)
-					game:GetService("ReplicatedStorage"):WaitForChild("Network"):WaitForChild("BlockWorlds_Break"):FireServer(blc.Pos)
-				end
-
-				while task.wait() do
-					if not data.mining then
-						break
-					end
-					
-					while data.mining  do
-						task.wait()
-						local temp_ores = {}
-						for i,v in pairs(blocks.Blocks) do
-							pcall(function()
-								local id = v.Part:GetAttribute("id")
-
-								if isOre(id) then
-									table.insert(temp_ores, v)
-								end
-							end)
-						end
-
-						local smth_found = false
-
-						if #temp_ores == 0 then
-							local function remove_border(pos)
-								local bblock = blocks:GetBlock(pos)
-
-								if bblock ~= nil then
-									destroy(bblock)
-								end
-							end
-
-							remove_border(Vector3int16.new(-8, y, -8))
-							remove_border(Vector3int16.new(7, y, -8))
-							remove_border(Vector3int16.new(7, y, 7))
-							remove_border(Vector3int16.new(-8, y, 7))
-
-							for z = -18, 18, 2 do
-								if not data.mining then
-									break
-								end
-								for x = -18, 18, 2 do
-									if not data.mining then
-										break
-									end
-									local block = blocks:GetBlock(Vector3int16.new(x, y, z))
-									if block ~= nil then
-										smth_found = true
-										local id = block.Part:GetAttribute("id")
-
-										if not isOre(id) then
-											local rng = math.random(0, 100)
-											if data.only_ores_tnt_chance > rng then
-												local save = save.GetSaves()[player]
-												if save ~= nil then
-													local consumables = save.Inventory.Consumable
-													for i,v in pairs(consumables) do
-														if table.find(data.only_ores_tnt, v.id) then
-															local id = i
-															game.Players.LocalPlayer.Character:SetPrimaryPartCFrame(block.Part.CFrame + Vector3.new(0, 5, 0))
-															local function spawn()
-																local args = {
-																	[1] = i,
-																	[2] = 1
-																}
-
-																game:GetService("ReplicatedStorage"):WaitForChild("Network"):WaitForChild("Consumables_Consume"):InvokeServer(unpack(args))
-
-															end
-
-															spawn()
-															break
-														end
-													end
-												end
-											elseif data.only_ores_tnt_chance <= rng then
-												destroy(block)
-												local other_block = Vector3int16.new(x, y - 1, z)
-												other_block = blocks:GetBlock(other_block)
-
-												if other_block ~= nil then
-													destroy(other_block)
-												end
-
-												local other_block2 = Vector3int16.new(x + 1, y, z + 1)
-												other_block2 = blocks:GetBlock(other_block2)
-
-												if other_block2 ~= nil then
-													destroy(other_block2)
-												end
-
-												local other_block3 = Vector3int16.new(x + 1, y - 1, z + 1)
-												other_block3 = blocks:GetBlock(other_block3)
-
-												if other_block3 ~= nil then
-													destroy(other_block3)
-												end
-
-											end
-
-										end
-									end
-								end
-							end
-
-
-							if data.mining and smth_found then
-								for i,v in pairs(blocks.Blocks) do
-									if v.Pos.Y == y - 1 or v.Pos.Y == y or v.Pos.Y > y + 1 then
-										local id = v.Part:GetAttribute("id")
-
-										if not isOre(id) then
-											v.Part:Destroy()
-										end
-									end
-								end
-							end
-							local fnd = false
-							if mcmd.GetBlockUnderPlayer() ~= nil then
-								fnd = true
-							end
-							
-							if not fnd then
-								y = 0
-								break
-							end
-							y -= 2
-						elseif #temp_ores > 0 then
-							for i,v in pairs(temp_ores) do
-								if not data.mining then
-									break
-								end
-								destroy(v)
-							end
-						end
-
-
-					end
-					
-				end
-
-
-
-
-			end
-
-			if current_block ~= nil and mode == "Default" then
-				local pos = current_block.Pos
-				local c = 0
-				local r2 = rad / 2
-				for y = -pos.Y, 256 do
-					if not data.mining then
-						break
-					end
-					local maxX = pos.X + r2
-					local minX = pos.X - r2 + 1
-					local maxZ = pos.Z + r2
-					local minZ = pos.Z - r2 + 1
-					for x = pos.X - r2 + 1, pos.X + r2 do
-						if not data.mining then
-							break
-						end
-						for z = pos.Z - r2 + 1, pos.Z + r2 do
-							if not data.mining then
-								break
-							end
-
-							local pos = Vector3int16.new(x,-y,z)
-							local new_block = blocks:GetBlock(pos)
-
-							local function breakblock(pos)
-								local new_block = blocks:GetBlock(pos)
-								if new_block == nil then
-									return
-								end
-								local cd = GetTimeToBreak(new_block, 0)
-								game:GetService("ReplicatedStorage"):WaitForChild("Network"):WaitForChild("BlockWorlds_Target"):FireServer(pos)
-								task.wait(cd)
-								game:GetService("ReplicatedStorage"):WaitForChild("Network"):WaitForChild("BlockWorlds_Break"):FireServer(pos)
-							end
-							if new_block ~= nil then
-								breakblock(pos)
-								local function wclip(coord, b)
-									if coord == "x" then
-										if x + b <= maxX and x + b >= minX then
-											breakblock(Vector3int16.new(x + b, -y, z))
-										end
-									elseif coord == "z" then
-										if z + b <= maxZ and z + b >= minZ then
-											breakblock(Vector3int16.new(x, -y, z + b))
-										end
-
-									end
-								end
-
-								wclip("x", 1)
-								wclip("x", 2)
-								wclip("z", 1)
-							end
-						end
-					end
-				end
-			end
-
-		end
-	end,
-})
-
-farm:Toggle({
-	Title = "Teleport to center",
-	Callback = function(val)
-		data.center = val
-	end,
-})
-
-farm:Dropdown({
-	Title = "Mining mode",
-	Values = { "Default", "Slices", "Only ores"},
-	Value = "Default",
-	Callback = function(val)
-		mode = val
-	end
-})
-
-farm:Section({
-	Title = "Slices mode options"
-})
-
-farm:Toggle({
-	Title = "Start at 0 y",
+pet:AddToggle("123", {
+	Title = "Infinity Pet Speed",
+	Default = data.infinity_pet_speed,
 	
 	Callback = function(val)
-		data.center_start_y_zero = val
+		data.infinity_pet_speed = val
 	end,
 })
 
-farm:Section({
-	Title = "Only ores options"
-})
+local old_pet_formula = clonefunction(PlayerPet.CalculateSpeedMultiplier)
 
-farm:Dropdown({
-	Title = "Select tnt to use",
-	Multi = true,
-	AllowNone = true,
-	Values = mining_event_items_short.tnts,
-	Value = {},
+hookfunction(PlayerPet.CalculateSpeedMultiplier, function(...)
+	if data.infinity_pet_speed then
+		return math.huge
+	end
+	
+	return old_pet_formula(...)
+end)
+
+farm:AddToggle("123",{
+	Title = "Auto open event egg",
+	Default = data.m_event_hatch,
+	
 	Callback = function(val)
-		data.only_ores_tnt = dec_short_names("tnts", val)
-	end,
-})
-
-farm:Slider({
-	Title = "TNT Use chance",
-	Value = {
-		Min = 0,
-		Max = 100,
-		Default = 0,
-	},
-
-	Callback = function(val)
-		data.only_ores_tnt_chance = val
-	end,
-})
-
-
-
-
-
-merchant:Toggle({
-	Title = "Auto buy mine merchant",
-
-	Callback = function(val)
-		data.merchant = val
-
-		while data.merchant do
-			task.wait(1)
-			for i = 1, 6 do
-				task.wait(0.1)
-				local args = {
-					[1] = "MiningMerchant",
-					[2] = i
-				}
-
-				game:GetService("ReplicatedStorage"):WaitForChild("Network"):WaitForChild("Merchant_RequestPurchase"):InvokeServer(unpack(args))
-
+		data.m_event_hatch = val
+		
+		EggSystem.stop()
+		
+		if data.m_event_hatch then
+			local egg = nil
+			
+			for i,v in pairs(workspace.__THINGS.CustomEggs:GetChildren()) do
+				pcall(function()
+					if v.PriceHUD.PriceHUD:FindFirstChild("Factory Coins") then
+						egg = v
+					end
+				end)
 			end
+			
+			EggSystem.start_open(egg, true)
 		end
 	end,
 })
+
+conf:AddButton({
+	Title = "Save configuration",
+	Callback = function()
+		local json = game:GetService("HttpService"):JSONEncode(data)
+		writefile("sh0velprod/Petsimulator99.conf", json)
+
+		client_notification({
+			Title = "sh0vel prod.",
+			Content = "Configuration saved!",
+			Duration = 3
+		})
+	end,
+})
+
+
+
+currency:AddToggle("123", {
+	Title = "Enable currency stats",
+	Default = data.currency_stat,
+	
+	Callback = function(val)
+		data.currency_stat = val
+		if not val then
+			pcall(function()
+				for i,v in pairs(getgenv().wtools.fake_currency) do
+					v:Destroy()
+				end
+			end)
+		end
+        local old_values = {}
+		while data.currency_stat and isActualScriptRunning() do
+			local suc, err = pcall(function()
+				local display_currency = {"Diamonds"}
+				local currency_path = game:GetService("Players").LocalPlayer.PlayerGui.MainLeft.Left.Currency
+				
+				for i,currency_type in pairs(display_currency) do
+					local copy = nil
+					if currency_path:FindFirstChild(currency_type) and not currency_path:FindFirstChild(currency_type.."fake") then
+						copy = currency_path:FindFirstChild(currency_type):Clone()
+						copy.Parent = currency_path
+						copy.Size = UDim2.fromOffset(0, currency_path:FindFirstChild(currency_type).Size.Y.Offset / 1.25)
+						copy.Name = currency_type.."fake"
+						table.insert(getgenv().wtools.fake_currency, copy)
+					end
+					
+					if currency_path:FindFirstChild(currency_type.."fake") then
+						copy = currency_path:FindFirstChild(currency_type.."fake")
+					end
+					
+					local found_currency = {}
+					
+					for i,v in pairs(save.Inventory.Currency) do
+						if v.id == currency_type then
+							found_currency = v
+						end
+					end
+					
+					if old_values[currency_type] == nil and found_currency ~= {} then
+						old_values[currency_type] = found_currency._am or 0
+					end
+					
+					if found_currency ~= {} then
+						local val = found_currency._am
+						local old_val = old_values[currency_type]
+						copy[currency_type].Amount.Size = UDim2.new(0, 1233, 0.8, 0)
+						copy[currency_type].Amount.TextXAlignment = Enum.TextXAlignment.Left
+						copy[currency_type].Amount.Text = string.format("Farmed %s in %s seconds", comma(val - old_val), math.floor(data.refresh_stat))
+						old_values[currency_type] = val
+					end
+				end
+			end)
+			
+			print(err)
+			
+			task.wait(data.refresh_stat)
+		end
+	end,
+})
+
+currency:AddSlider("123", {
+	Title = "Refresh Time",
+	Min = 1,
+	Max = 120,
+	Default = data.refresh_stat,
+	Rounding = 1,
+	Callback = function(val)
+		data.refresh_stat = val
+	end,
+})
+
+
+
+
+egg:AddParagraph({
+	Title = "Auto egg hatch settings",
+	Context = "Set settings for auto hatch"
+})
+
+egg:AddSlider("123", {
+	Title = "Egg Amount (ignore float value)",
+	Default = data.egg_open,
+	Min = 1,
+	Rounding = 1,
+	Max = 140,
+	Callback = function(val)
+		data.egg_open = val
+	end,
+})
+
+
+
