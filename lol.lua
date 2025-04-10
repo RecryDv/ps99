@@ -190,8 +190,18 @@ Tabs.aw:AddToggle("123", {
 					end
 				end)
 				
-				if broken then break end
 			end
+
+            pcall(function()
+            for i,v in pairs(tree:FindFirstChildOfClass("Model").PrimaryPart:GetChildren()) do
+				pcall(function()
+					if v.Enabled == true then
+						broken = true
+					end
+				end)
+				
+			end
+            end)
 			
 			return broken
 		end
@@ -213,42 +223,41 @@ Tabs.aw:AddToggle("123", {
 			end
 		end
 		
-		local client_tree = ""
 		
 		while d.aw do
+        local client_tree = ""
 			for loc, val in pairs(d.aw_loc) do
-				if val then
+				pcall(function()  
+                if val then
 					task.wait()
 					local trees = workspace.Game.Maps[loc].Trees:GetChildren()
 					local tree = trees[math.random(1, #trees)]
 					client_tree = tostring(game:GetService("HttpService"):GenerateGUID(false))
 					local current = client_tree
-
-					local l_ID = TreeService:getLumberId()
-
 					if not isbroken(tree) then
 						local root = tree:FindFirstChildOfClass("Model")
 
 						client_not("Custom", "[sh0vel prod.] | Teleporting to tree.", 2.5)
 
-						spawn(function()
-							while client_tree == current and d.aw do
-								task.wait()
-								game.Players.LocalPlayer.Character.PrimaryPart.CFrame = root.PrimaryPart.CFrame
-							end
-						end)
+						
 
 						repeat
-							TreeService.damage2:Fire(
+                        game.Players.LocalPlayer.Character.PrimaryPart.CFrame = root.PrimaryPart.CFrame
+							
+							task.spawn(function()
+                            TreeService.damage2:Fire(
 								tree:GetAttribute("groupId"),
 								tree:GetAttribute("treeId"),
 								d.L_id
 							)
+                            end)
 							task.wait()
 						until not d.aw or isbroken(tree)
 						client_not("Custom", "[sh0vel prod.] | Done with tree "..client_tree, 2.5)
 					end
 				end
+                end)
+
 			end
 		end
 	end,
