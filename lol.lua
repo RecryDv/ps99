@@ -33,7 +33,7 @@ end
 local d = {
 	aw = false,
 	ac = false,
-	aw_loc = "",
+	aw_loc = {},
 	ao = false,
 	fs = false,
 	wood = "",
@@ -55,29 +55,6 @@ Tabs.op:AddButton({
 		end)
 		
 		client_not("Custom", "[sh0vel prod.] | Auto rebirth was unlocked!", 3)
-	end,
-})
-
-Tabs.op:AddButton({
-	Title = "Unlock insane farmer",
-	Callback = function()
-		local FarmerItemsModule = require(game.ReplicatedStorage.Shared.Values.FarmerItems)
-		
-		local t = 0
-		pcall(function()
-			t = FarmerItemsModule()
-		end)
-		local unlocked = (t == 1000000000)
-
-		if unlocked == true then
-			client_not("Custom", "[sh0vel prod.] | Insane farmer is already unlocked!", 3)
-			return
-		end
-		hookfunction(FarmerItemsModule, function()
-			return 1000000000
-		end)
-
-		client_not("Custom", "[sh0vel prod.] | Insane farmer was unlocked!", 3)
 	end,
 })
 
@@ -142,16 +119,27 @@ for _, location in pairs(workspace.Game.Maps:GetChildren()) do
 	table.insert(trees_loc, location.Name)
 end
 
-Tabs.aw:AddDropdown("123", {
+local fucking_dropdown = Tabs.aw:AddDropdown("123", {
 	Title = "Farm wood location",
 	Values = trees_loc,
-	Default = "",
-	AllowNone = false,
+	Multi = true,
+	Default = {},
 	
 	Callback = function(val)
 		d.aw_loc = val
 	end,
 })
+
+local frmtd = {}
+
+for i,v in pairs(trees_loc) do
+	frmtd[v] = false
+end
+
+fucking_dropdown:SetValue(frmtd)
+fucking_dropdown:SetValue(frmtd)
+
+
 
 Tabs.aw:AddButton({
 	Title = "Define lumber id",
@@ -195,23 +183,21 @@ Tabs.aw:AddToggle("123", {
 		
 		local function isbroken(tree)
 			local broken = false
-			local f = 0
-			for i,v in pairs(tree:FindFirstChildOfClass("Model").PrimaryPart:GetChildren()) do
-				f+=1
-				if v:IsA("BillboardGui") and v.Enabled then
-					broken = true
-				end
-			end
-			
-			if not broken and f == 0 then
-				broken = false
+			for i,v in pairs(tree:FindFirstChildOfClass("Model"):GetChildren()) do
+				pcall(function()
+					if v.Transparency == 0.5 then
+						broken = true
+					end
+				end)
+				
+				if broken then break end
 			end
 			
 			return broken
 		end
 		
 		if d.aw then
-			if d.aw_loc == "" then
+			if d.aw_loc == {} or d.aw_loc == nil then
 				client_not("Custom", "[sh0vel prod.] | Please select location!", 5)
 				return
 			end
@@ -230,35 +216,39 @@ Tabs.aw:AddToggle("123", {
 		local client_tree = ""
 		
 		while d.aw do
-			task.wait()
-			local trees = workspace.Game.Maps[d.aw_loc].Trees:GetChildren()
-			local tree = trees[math.random(1, #trees)]
-			client_tree = tostring(game:GetService("HttpService"):GenerateGUID(false))
-			local current = client_tree
-			
-			local l_ID = TreeService:getLumberId()
-			
-			if not isbroken(tree) then
-				local root = tree:FindFirstChildOfClass("Model")
-				
-				client_not("Custom", "[sh0vel prod.] | Teleporting to tree.", 2.5)
-				
-				spawn(function()
-					while client_tree == current and d.aw do
-						task.wait()
-						game.Players.LocalPlayer.Character.PrimaryPart.CFrame = root.PrimaryPart.CFrame
-					end
-				end)
-				
-				repeat
-					TreeService.damage2:Fire(
-						tree:GetAttribute("groupId"),
-						tree:GetAttribute("treeId"),
-						d.L_id
-					)
+			for loc, val in pairs(d.aw_loc) do
+				if val then
 					task.wait()
-				until not d.aw or isbroken(tree)
-				client_not("Custom", "[sh0vel prod.] | Done with tree "..client_tree, 2.5)
+					local trees = workspace.Game.Maps[loc].Trees:GetChildren()
+					local tree = trees[math.random(1, #trees)]
+					client_tree = tostring(game:GetService("HttpService"):GenerateGUID(false))
+					local current = client_tree
+
+					local l_ID = TreeService:getLumberId()
+
+					if not isbroken(tree) then
+						local root = tree:FindFirstChildOfClass("Model")
+
+						client_not("Custom", "[sh0vel prod.] | Teleporting to tree.", 2.5)
+
+						spawn(function()
+							while client_tree == current and d.aw do
+								task.wait()
+								game.Players.LocalPlayer.Character.PrimaryPart.CFrame = root.PrimaryPart.CFrame
+							end
+						end)
+
+						repeat
+							TreeService.damage2:Fire(
+								tree:GetAttribute("groupId"),
+								tree:GetAttribute("treeId"),
+								d.L_id
+							)
+							task.wait()
+						until not d.aw or isbroken(tree)
+						client_not("Custom", "[sh0vel prod.] | Done with tree "..client_tree, 2.5)
+					end
+				end
 			end
 		end
 	end,
